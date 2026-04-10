@@ -1,0 +1,10 @@
+.venv
+env
+.env
+venv
+
+.vscode
+
+.egg-info
+
+.DS_Store
