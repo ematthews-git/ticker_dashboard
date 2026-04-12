@@ -1,0 +1,69 @@
+"""
+Utils for the entire ticker_dashboard application.
+"""
+
+import streamlit as st
+import numpy as np
+
+
+def configure_page() -> None:
+    """Configure page settings for the entire app."""
+    st.set_page_config(
+        page_title="Ticker Mentions Dashboard",
+        page_icon="📈",
+        layout="wide",
+        initial_sidebar_state="expanded",
+    )
+
+    app_style = """
+    <style>
+    /*#MainMenu {visibility: hidden;}*/
+    footer {visibility: hidden;}
+    footer:after {
+        content: "Copyright © 2026 Ethan M. All rights reserved.";
+        visibility: visible;
+        display: block;
+        position: fixed;
+        bottom: 0;
+        left: 0;
+        width: 100%;
+        text-align: center;
+        padding: 10px;
+        color: grey;
+        font-size: 0.85rem;
+    }
+    </style>
+    """
+    st.markdown(app_style, unsafe_allow_html=True)
+
+
+def sentiment_to_colour(sentiment: float) -> str:
+    """Convert a sentiment score to a hex colour.
+
+    Args:
+        sentiment (float): Sentiment score to be converted, must be in the range -1 (most negative) to 1 (most positive).
+
+    Returns:
+        str: The hex colour corresponding to the sentiment score.
+    """
+    # Anchor colors as RGB tuples
+    negative_color = np.array([214, 39, 40])  # #d62728 red
+    neutral_color = np.array([136, 136, 136])  # #888888 grey
+    positive_color = np.array([44, 160, 44])  # #2ca02c green
+
+    # Clamp to range
+    sentiment = np.clip(sentiment, -1, 1)
+
+    # Normalise to 0–1
+    t = (sentiment - (-1)) / (1 - (-1))
+
+    # Interpolate: 0–0.5 is negative→neutral, 0.5–1 is neutral→positive
+    if t < 0.5:
+        frac = t / 0.5  # 0 to 1 within the negative half
+        rgb = (1 - frac) * negative_color + frac * neutral_color
+    else:
+        frac = (t - 0.5) / 0.5  # 0 to 1 within the positive half
+        rgb = (1 - frac) * neutral_color + frac * positive_color
+
+    r, g, b = int(rgb[0]), int(rgb[1]), int(rgb[2])
+    return f"#{r:02x}{g:02x}{b:02x}"

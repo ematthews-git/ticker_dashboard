@@ -1,8 +1,182 @@
 import streamlit as st
 import pandas as pd
+import plotly.express as px
+from plotly.subplots import make_subplots
+from plotly import graph_objects as go
 from db import client
+from utils import configure_page, sentiment_to_colour
 
-df = pd.DataFrame(client.fetch_mention_data("AIXI"))
+# variables
+SUBREDDITS = [
+    "r/pennystocks",
+    "r/SmallStreetBets",
+    "r/Daytrading",
+    "r/ShortSqueeze",
+    "r/10xpennystocks",
+]
 
-st.dataframe(df)
+timeframe_map = {
+    "1 Hour": "1h",
+    "6 Hours": "6h",
+    "12 Hours": "12h",
+    "24 Hours": "24h",
+    "3 Days": "72h",
+    "7 Days": "168h",
+}
 
+st.title("Ticker Mentions Dashboard")
+
+configure_page()
+
+cols = st.columns([1, 3])
+
+# SUBREDDIT SELECTION
+if "subreddits" not in st.session_state:
+    st.session_state.subreddits = st.query_params.get("subreddits", "All").split(",")
+
+
+# update query params when subreddits are changed
+def update_subreddits():
+    if st.session_state.subreddits:
+        st.query_params["subreddits"] = st.session_state.subreddits
+    else:
+        st.query_params.pop("subreddits", None)
+
+
+top_left_cell = cols[0].container(
+    border=True, height="stretch", vertical_alignment="center"
+)
+
+with top_left_cell:
+    # Selecter box for subreddits
+    subreddits = st.multiselect(
+        "Subreddits",
+        options=sorted(set(SUBREDDITS) | set(st.session_state.subreddits)),
+        default=st.session_state.subreddits,
+        placeholder="ALL",
+        help="Select subreddits to filter by. If none are selected, data from all subreddits will be shown.",
+        accept_new_options=False,
+        on_change=update_subreddits,
+    )
+
+
+# Ticker selection
+
+with top_left_cell:
+    ticker = st.text_input(
+        "Ticker",
+        value=st.query_params.get("ticker", ""),
+        placeholder="Enter a ticker symbol (e.g. AAPL)",
+    )
+
+
+# timeframe selection
+
+with top_left_cell:
+    timeframe = st.pills(
+        "Timeframe",
+        options=list(timeframe_map.keys()),
+        default="3 Days",
+    )
+
+# DATA DISPLAY
+right_cell = cols[1].container(border=True, height="stretch")
+
+
+def retrieve_data() -> tuple[pd.DataFrame, pd.DataFrame]:
+    """Retrieve data using client function.
+
+    Uses the ticker, subreddits, and timeframe selected by the user to fetch data from the database.
+
+    Returns:
+        tuple[mention_data, price_data]: A tuple containing the mention data and price data dataframes.
+    """
+    if ticker:
+        with st.spinner("Fetching data..."):
+            data = client.fetch_mention_data(
+                ticker, subreddits=subreddits, hours=int(timeframe_map[timeframe][:-1])
+            )
+
+            price_data = client.fetch_price_data(
+                ticker, hours=int(timeframe_map[timeframe][:-1])
+            )
+
+            if not data.empty:
+                return data, price_data
+            else:
+                st.warning("No data found for the specified ticker and timeframe.")
+                return pd.DataFrame(), pd.DataFrame()
+    else:
+        st.info("Please enter a ticker symbol to display data.")
+        return pd.DataFrame(), pd.DataFrame()
+
+
+# Get data
+try:
+    df, price_df = retrieve_data()
+    df["colour"] = df["avg_sentiment"].apply(sentiment_to_colour)
+except Exception as e:
+    st.error(f"An error occurred while fetching data: {e}")
+
+# Plot
+with right_cell:
+    if not df.empty:
+        if not price_df.empty:
+            fig = make_subplots(
+                rows=2, cols=1, shared_xaxes=True, row_heights=[0.7, 0.3]
+            )
+
+            fig.add_trace(
+                go.Scatter(x=price_df["timestamp"], y=price_df["close"], name="Close"),
+                row=1,
+                col=1,
+            )
+            fig.add_trace(
+                go.Bar(
+                    x=df["timestamp"],
+                    y=df["mention_count"],
+                    name="Mentions(colour by sentiment)",
+                ),
+                row=2,
+                col=1,
+            )
+
+            # Chose bar colours based on subreddit if multiple subreddits are present, otherwise use sentiment colours
+            if len(df["subreddit"].unique()) > 1:
+                fig.update_traces(
+                    marker_color=df["subreddit"].map(
+                        {
+                            sub: px.colors.qualitative.Plotly[i]
+                            for i, sub in enumerate(df["subreddit"].unique())
+                        }
+                    ),
+                )
+            else:
+                fig.update_traces(marker_color=df["colour"])
+
+        total_mentions = df["mention_count"].sum()
+        unique_users = df["unique_users"].max()
+        avg_sentiment = df["avg_sentiment"].mean()
+
+        col1, col2, col3 = st.columns(3)
+        col1.markdown(f"**Total Mentions**  \n{total_mentions:,}")
+        col2.markdown(f"**Unique Users**  \n{unique_users:,}")
+        col3.markdown(f"**Avg Sentiment**  \n{avg_sentiment:.2f}")
+
+        fig.update_layout(margin=dict(t=20, b=20, l=20, r=20))
+
+        fig.update_traces(
+            hovertemplate="<b>%{x}</b><br>Mentions: %{y}<br>Sentiment: %{customdata[0]:.2f}"
+        )
+
+        fig.update_layout(
+            legend=dict(
+                orientation="h",
+                y=1.02,  # just above the plot area
+                x=0.0,  # left aligned
+                xanchor="left",
+                yanchor="bottom",
+            )
+        )
+
+        st.plotly_chart(fig, use_container_width=True)
