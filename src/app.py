@@ -19,6 +19,8 @@ def render_ticker_bar(top_tickers: pd.DataFrame) -> None:
     Args:
         top_tickers (pd.DataFrame): Dataframe containing top tickers with columns 'ticker' and 'mention_count'.
     """
+    st.markdown("#### Top Daily Tickers")
+
     cols = st.columns(len(top_tickers))
     for col, row in zip(cols, top_tickers.itertuples()):
         col.markdown(f"**{row.ticker}**  \n{row.mention_count:,} mentions")
@@ -26,6 +28,7 @@ def render_ticker_bar(top_tickers: pd.DataFrame) -> None:
 
 render_ticker_bar(get_top_tickers_12h())
 
+st.divider()
 
 cols = st.columns([1, 3])
 
@@ -113,11 +116,13 @@ def retrieve_data() -> tuple[pd.DataFrame, pd.DataFrame]:
 # Get data
 try:
     df, price_df = retrieve_data()
-    df["colour"] = df["avg_sentiment"].apply(sentiment_to_colour)
+    # supress error when trying to apply colour mapping to empty dataframe
+    if not df.empty:
+        df["colour"] = df["avg_sentiment"].apply(sentiment_to_colour)
 except Exception as e:
     st.error(f"An error occurred while fetching data: {e}")
 
-# Plot
+# -- Display data --
 with right_cell:
     if not df.empty:
         if not price_df.empty:
