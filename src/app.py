@@ -3,30 +3,29 @@ import pandas as pd
 import plotly.express as px
 from plotly.subplots import make_subplots
 from plotly import graph_objects as go
-from db import client
 from utils import configure_page, sentiment_to_colour
+from config import SUBREDDITS, timeframe_map
+from cache import get_mention_data_1h, get_price_data_1h, get_top_tickers_12h
 
-# variables
-SUBREDDITS = [
-    "r/pennystocks",
-    "r/SmallStreetBets",
-    "r/Daytrading",
-    "r/ShortSqueeze",
-    "r/10xpennystocks",
-]
-
-timeframe_map = {
-    "1 Hour": "1h",
-    "6 Hours": "6h",
-    "12 Hours": "12h",
-    "24 Hours": "24h",
-    "3 Days": "72h",
-    "7 Days": "168h",
-}
 
 st.title("Ticker Mentions Dashboard")
 
 configure_page()
+
+
+def render_ticker_bar(top_tickers: pd.DataFrame) -> None:
+    """Render a bar across the top of the page featuring the top tickers daily.
+
+    Args:
+        top_tickers (pd.DataFrame): Dataframe containing top tickers with columns 'ticker' and 'mention_count'.
+    """
+    cols = st.columns(len(top_tickers))
+    for col, row in zip(cols, top_tickers.itertuples()):
+        col.markdown(f"**{row.ticker}**  \n{row.mention_count:,} mentions")
+
+
+render_ticker_bar(get_top_tickers_12h())
+
 
 cols = st.columns([1, 3])
 
@@ -93,11 +92,11 @@ def retrieve_data() -> tuple[pd.DataFrame, pd.DataFrame]:
     """
     if ticker:
         with st.spinner("Fetching data..."):
-            data = client.fetch_mention_data(
+            data = get_mention_data_1h(
                 ticker, subreddits=subreddits, hours=int(timeframe_map[timeframe][:-1])
             )
 
-            price_data = client.fetch_price_data(
+            price_data = get_price_data_1h(
                 ticker, hours=int(timeframe_map[timeframe][:-1])
             )
 
