@@ -86,6 +86,15 @@ with top_left_cell:
         default="3 Days",
     )
 
+    # bucket option
+    daily_bucket = False
+    if timeframe_map[timeframe] in ["168h", "336h", "720h"]:
+        daily_bucket = st.toggle(
+            "Daily Buckets",
+            help="Group data into daily buckets instead of hourly.",
+            value=True,
+        )
+
 # DATA DISPLAY
 right_cell = cols[1].container(border=True, height="stretch")
 
@@ -123,9 +132,7 @@ def retrieve_data() -> tuple[pd.DataFrame, pd.DataFrame]:
 # Get data
 try:
     df, price_df = retrieve_data()
-    # supress error when trying to apply colour mapping to empty dataframe
-    if not df.empty:
-        df["colour"] = df["avg_sentiment"].apply(sentiment_to_colour)
+
 except Exception as e:
     st.error(f"An error occurred while fetching data: {e}")
 
@@ -137,18 +144,34 @@ with right_cell:
                 rows=2, cols=1, shared_xaxes=True, row_heights=[0.7, 0.3]
             )
 
+            if daily_bucket:
+                price_df = price_df.sort_values("timestamp")
+                df["timestamp"] = pd.to_datetime(df["timestamp"]).dt.floor("D")
+                df = (
+                    df.groupby(["timestamp", "subreddit"])
+                    .agg(
+                        mention_count=("mention_count", "sum"),
+                        unique_users=("unique_users", "max"),
+                        avg_sentiment=("avg_sentiment", "mean"),
+                    )
+                    .reset_index()
+                )
+
+                price_df["timestamp"] = pd.to_datetime(price_df["timestamp"]).dt.floor(
+                    "D"
+                )
+                price_df = (
+                    price_df.groupby("timestamp")
+                    .agg(close=("close", "last"))
+                    .reset_index()
+                )
+
+            df["colour"] = df["avg_sentiment"].apply(sentiment_to_colour)
+
+            # price trace
             fig.add_trace(
                 go.Scatter(x=price_df["timestamp"], y=price_df["close"], name="Close"),
                 row=1,
-                col=1,
-            )
-            fig.add_trace(
-                go.Bar(
-                    x=df["timestamp"],
-                    y=df["mention_count"],
-                    name="Mentions(colour by sentiment)",
-                ),
-                row=2,
                 col=1,
             )
 
@@ -170,6 +193,15 @@ with right_cell:
                         col=1,
                     )
             else:
+                fig.add_trace(
+                    go.Bar(
+                        x=df["timestamp"],
+                        y=df["mention_count"],
+                        name="Mentions(colour by sentiment)",
+                    ),
+                    row=2,
+                    col=1,
+                )
                 fig.update_traces(marker_color=df["colour"])
 
         total_mentions = df["mention_count"].sum()
@@ -180,6 +212,9 @@ with right_cell:
         col1.markdown(f"**Total Mentions**  \n{total_mentions:,}")
         col2.markdown(f"**Unique Users**  \n{unique_users:,}")
         col3.markdown(f"**Avg Sentiment**  \n{avg_sentiment:.2f}")
+
+        if len(df["subreddit"].unique()) > 1:
+            st.caption("💡 Select a single subreddit to colour bars by sentiment")
 
         fig.update_layout(margin=dict(t=20, b=20, l=20, r=20))
 
