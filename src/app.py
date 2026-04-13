@@ -5,7 +5,12 @@ from plotly.subplots import make_subplots
 from plotly import graph_objects as go
 from utils import configure_page, sentiment_to_colour
 from config import SUBREDDITS, timeframe_map
-from cache import get_mention_data_1h, get_price_data_1h, get_top_tickers_12h
+from cache import (
+    get_mention_data_1h,
+    get_price_data_1h,
+    get_top_tickers_12h,
+    get_top_tickers_1h,
+)
 
 
 st.title("Ticker Mentions Dashboard")
@@ -67,7 +72,7 @@ with top_left_cell:
 with top_left_cell:
     ticker = st.text_input(
         "Ticker",
-        value=st.query_params.get("ticker", ""),
+        value=st.query_params.get("ticker", "").upper(),
         placeholder="Enter a ticker symbol (e.g. AAPL)",
     )
 
@@ -96,11 +101,13 @@ def retrieve_data() -> tuple[pd.DataFrame, pd.DataFrame]:
     if ticker:
         with st.spinner("Fetching data..."):
             data = get_mention_data_1h(
-                ticker, subreddits=subreddits, hours=int(timeframe_map[timeframe][:-1])
+                ticker.upper(),
+                subreddits=subreddits,
+                hours=int(timeframe_map[timeframe][:-1]),
             )
 
             price_data = get_price_data_1h(
-                ticker, hours=int(timeframe_map[timeframe][:-1])
+                ticker.upper(), hours=int(timeframe_map[timeframe][:-1])
             )
 
             if not data.empty:
@@ -154,6 +161,7 @@ with right_cell:
                             for i, sub in enumerate(df["subreddit"].unique())
                         }
                     ),
+                    name="Mentions (coloured by subreddit)",
                 )
             else:
                 fig.update_traces(marker_color=df["colour"])
@@ -183,4 +191,40 @@ with right_cell:
             )
         )
 
-        st.plotly_chart(fig, use_container_width=True)
+        # table view
+        table_df = df[
+            ["timestamp", "subreddit", "mention_count", "avg_sentiment"]
+        ].copy()
+        table_df["timestamp"] = pd.to_datetime(table_df["timestamp"]).dt.strftime(
+            "%Y-%m-%d %H:%M:%S"
+        )
+
+        # tabs
+        tab_chart, tab_table = st.tabs(["Chart View", "Table View"])
+
+        with tab_chart:
+            st.plotly_chart(fig, width="stretch")
+        with tab_table:
+            st.dataframe(table_df, width="stretch")
+
+# NEXT SECTION - see list of top tickers
+
+st.header("Most popular tickers")
+
+cols = st.columns([1, 2])
+
+left_cell = cols[0].container(border=True, height="stretch")
+
+with left_cell:
+    hours = st.text_input(
+        "Lookback Hours",
+        value="12",
+        placeholder="Enter number of hours to look back (e.g. 12)",
+    )
+
+    # display df underneath
+    if hours.isdigit():
+        top_tickers_df = get_top_tickers_1h(hours=int(hours))
+        st.dataframe(top_tickers_df, width="stretch")
+    else:
+        st.warning("Please enter a valid number of hours to look back.")

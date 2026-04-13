@@ -1,4 +1,3 @@
-import streamlit as st
 import pandas as pd
 from datetime import datetime, timedelta, timezone
 from config import supabase
@@ -70,20 +69,18 @@ def fetch_top_tickers(hours: int = 12, limit: int = 10) -> pd.DataFrame:
 
     Args:
         hours (int, optional): How many hours to lookback. Defaults to 12 hours.
-        limit (int, optional): The maximum number of tickers to return. Defaults to 10.
+        limit (int, optional): The maximum number of tickers to return. Defaults to 10. Must be below 50.
     Returns:
         pd.DataFrame: Dataframe containing the top mentioned tickers and their mention counts.
     """
+    if limit >= 50:
+        limit = 50
+
     end_time = (datetime.now(timezone.utc) - timedelta(hours=hours)).isoformat()
 
-    response = (
-        supabase.table("mentions")
-        .select("ticker, mention_count, avg_sentiment")
-        .gte("timestamp", end_time)
-        .order("mention_count", desc=True)
-        .limit(limit)
-        .execute()
-    )
+    response = supabase.rpc(
+        "get_top_tickers", {"lookback_time": end_time, "row_limit": limit}
+    ).execute()
 
     top_tickers = pd.DataFrame(response.data)
 

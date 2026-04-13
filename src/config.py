@@ -25,4 +25,6 @@ timeframe_map = {
     "24 Hours": "24h",
     "3 Days": "72h",
     "7 Days": "168h",
+    "14 Days": "336h",
+    "30 Days": "720h",
 }

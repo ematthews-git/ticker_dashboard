@@ -52,3 +52,15 @@ def get_top_tickers_12h(hours: int = 12) -> pd.DataFrame:
         pd.DataFrame: Dataframe containing top tickers with columns 'ticker' and 'mention_count'.
     """
     return client.fetch_top_tickers(hours=hours)
+
+
+@st.cache_data(ttl=3600)
+def get_top_tickers_1h(hours: int = 12) -> pd.DataFrame:
+    """Fetch top tickers for given timeframe and caches for 1 hour.
+
+    Args:
+        hours (int, optional): How many hours to lookback. Defaults to 12 hours.
+    returns:
+        pd.DataFrame: Dataframe containing top tickers with columns 'ticker' and 'mention_count'.
+    """
+    return client.fetch_top_tickers(hours=hours)
