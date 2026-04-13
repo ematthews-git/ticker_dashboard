@@ -4,3 +4,4 @@ pandas
 dotenv
 plotly
 statsmodels
+numpy

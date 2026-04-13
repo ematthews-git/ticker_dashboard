@@ -1,6 +1,7 @@
 import streamlit as st
 import pandas as pd
 import plotly.express as px
+import numpy as np
 from plotly.subplots import make_subplots
 from plotly import graph_objects as go
 from utils import configure_page, sentiment_to_colour
@@ -56,7 +57,7 @@ def update_subreddits():
 
 
 top_left_cell = cols[0].container(
-    border=True, height="stretch", vertical_alignment="center"
+    border=True, height="stretch", vertical_alignment="bottom"
 )
 
 with top_left_cell:
@@ -262,52 +263,144 @@ with right_cell:
 cols = st.columns([1, 1, 1])
 
 left_cell = cols[0].container(border=True, height="stretch")
+mid_cell = cols[1].container(border=True, height="content")
+right_cell = cols[2].container(border=True, height="stretch")
 
-right_cell = cols[1].container(border=True, height="content")
+# Create predictive and reactive correlation charts
+# PREDICTIVE
+if not ticker:
+    st.info("Please enter a ticker symbol to display correlation data.")
+else:
+    sentiment_df = (
+        df.groupby("timestamp")
+        .agg(avg_sentiment=("avg_sentiment", "mean"))
+        .reset_index()
+        .sort_values("timestamp")
+    )
+
+    price_df_sorted = price_df.sort_values("timestamp")
+    price_df_sorted["price_change"] = price_df_sorted["close"].pct_change().shift(-1)
+
+    corr_df = pd.merge(
+        sentiment_df,
+        price_df_sorted[["timestamp", "price_change"]],
+        on="timestamp",
+        how="inner",
+    ).dropna()
+
+    fig_corr = px.scatter(
+        corr_df,
+        x="avg_sentiment",
+        y="price_change",
+        trendline="ols",
+        labels={
+            "avg_sentiment": "Sentiment",
+            "price_change": "Next Period Price Change",
+        },
+        hover_data=["timestamp"],
+    )
+    fig_corr.update_layout(margin=dict(t=20, b=20, l=20, r=20))
+
+    # REACTIVE
+    corr_df_reactive = pd.merge(
+        sentiment_df,
+        price_df_sorted[["timestamp", "price_change"]],
+        on="timestamp",
+        how="inner",
+    ).dropna()
+
+    # Shift sentiment forward instead of price
+    corr_df_reactive["next_sentiment"] = corr_df_reactive["avg_sentiment"].shift(-1)
+    corr_df_reactive = corr_df_reactive.dropna()
+
+    fig_reactive = px.scatter(
+        corr_df_reactive,
+        x="next_sentiment",
+        y="price_change",
+        trendline="ols",
+        labels={
+            "price_change": "Price Change",
+            "next_sentiment": "Next Period Sentiment",
+        },
+        hover_data=["timestamp"],
+    )
 
 with left_cell:
     """
     ### Correlation Between Sentiment and Next Period Price Change
     """
-    if not ticker:
-        st.info("Please enter a ticker symbol to display correlation data.")
-    else:
-        sentiment_df = (
-            df.groupby("timestamp")
-            .agg(avg_sentiment=("avg_sentiment", "mean"))
-            .reset_index()
-            .sort_values("timestamp")
+    if daily_bucket:
+        st.warning("Correlation may be less meaningful with daily buckets enabled.")
+
+    st.plotly_chart(fig_corr, width="stretch")
+
+with mid_cell:
+    """
+    ### Correlation Between Sentiment and Previous Period Price Change (Reactivity)
+    """
+
+    if daily_bucket:
+        st.warning("Correlation may be less meaningful with daily buckets enabled.")
+
+    st.plotly_chart(fig_reactive, width="stretch")
+
+with right_cell:
+    """
+    ### Lag analysis + mention volume
+    """
+
+    LAGS = [1, 2, 4, 6, 12, 24]
+
+    # aggregates per timestamp the weighted sentiment and total mention count
+    sentiment_df = (
+        df.groupby("timestamp")
+        .apply(
+            lambda x: pd.Series(
+                {
+                    "weighted_sentiment": np.average(
+                        x["avg_sentiment"], weights=x["mention_count"]
+                    ),
+                    "mention_count": x["mention_count"].sum(),
+                }
+            )
         )
+        .reset_index()
+        .sort_values("timestamp")
+    )
 
-        price_df_sorted = price_df.sort_values("timestamp")
-        price_df_sorted["price_change"] = (
-            price_df_sorted["close"].pct_change().shift(-1)
-        )
+    price_df_sorted = price_df.sort_values("timestamp")
+    price_df_sorted["price_change"] = price_df_sorted["close"].pct_change().shift(-1)
 
-        corr_df = pd.merge(
-            sentiment_df,
-            price_df_sorted[["timestamp", "price_change"]],
-            on="timestamp",
-            how="inner",
-        ).dropna()
+    # r-value
+    merged = pd.merge(
+        sentiment_df,
+        price_df_sorted[["timestamp", "price_change"]],
+        on="timestamp",
+        how="inner",
+    ).dropna()
 
-        fig_corr = px.scatter(
-            corr_df,
-            x="avg_sentiment",
-            y="price_change",
-            trendline="ols",
-            labels={
-                "avg_sentiment": "Sentiment",
-                "price_change": "Next Period Price Change",
-            },
-            hover_data=["timestamp"],
-        )
-        fig_corr.update_layout(margin=dict(t=20, b=20, l=20, r=20))
+    lag_results = []
+    for lag in LAGS:
+        lagged = merged.copy()
+        lagged["price_change"] = lagged["price_change"].shift(-lag)
+        lagged = lagged.dropna()
+        if len(lagged) > 2:
+            r = lagged["weighted_sentiment"].corr(lagged["price_change"])
+            lag_results.append({"lag": lag, "r": r})
 
-        if daily_bucket:
-            st.warning("Correlation may be less meaningful with daily buckets enabled.")
+    lag_df = pd.DataFrame(lag_results)
 
-        st.plotly_chart(fig_corr, width="stretch")
+    fig_lag = px.bar(
+        lag_df,
+        x="lag",
+        y="r",
+        labels={"lag": "Lag (hours)", "r": "Correlation Coefficient"},
+        title="Correlation Between Sentiment and Future Price Change at Different Lags",
+    )
+    fig_lag.add_hline(y=0, line_dash="dash", line_color="grey")
+    fig_lag.update_layout(margin=dict(t=20, b=20, l=20, r=20))
+
+    st.plotly_chart(fig_lag, width="stretch")
 
 
 cols = st.columns([1, 2])
