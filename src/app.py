@@ -154,15 +154,21 @@ with right_cell:
 
             # Chose bar colours based on subreddit if multiple subreddits are present, otherwise use sentiment colours
             if len(df["subreddit"].unique()) > 1:
-                fig.update_traces(
-                    marker_color=df["subreddit"].map(
-                        {
-                            sub: px.colors.qualitative.Plotly[i]
-                            for i, sub in enumerate(df["subreddit"].unique())
-                        }
-                    ),
-                    name="Mentions (coloured by subreddit)",
-                )
+                colour_map = {
+                    sub: px.colors.qualitative.Plotly[i]
+                    for i, sub in enumerate(df["subreddit"].unique())
+                }
+                for sub, group in df.groupby("subreddit"):
+                    fig.add_trace(
+                        go.Bar(
+                            x=group["timestamp"],
+                            y=group["mention_count"],
+                            name=sub,
+                            marker_color=colour_map[sub],
+                        ),
+                        row=2,
+                        col=1,
+                    )
             else:
                 fig.update_traces(marker_color=df["colour"])
 
@@ -188,7 +194,8 @@ with right_cell:
                 x=0.0,  # left aligned
                 xanchor="left",
                 yanchor="bottom",
-            )
+            ),
+            barmode="stack",
         )
 
         # table view
