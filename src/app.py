@@ -22,6 +22,7 @@ configure_page()
 daily_bucket = False
 
 
+# displays across top of page
 def render_ticker_bar(top_tickers: pd.DataFrame) -> None:
     """Render a bar across the top of the page featuring the top tickers daily.
 
@@ -32,7 +33,7 @@ def render_ticker_bar(top_tickers: pd.DataFrame) -> None:
 
     cols = st.columns(len(top_tickers))
     for col, row in zip(cols, top_tickers.itertuples()):
-        col.markdown(f"**{row.ticker}**  \n{row.mention_count:,} mentions")
+        col.markdown(f"**{row.ticker}**  \n{row.total_mentions:,} mentions")
 
 
 top_tickers_df = get_top_tickers_12h()
@@ -74,7 +75,6 @@ with top_left_cell:
 
 
 # Ticker selection
-
 with top_left_cell:
     ticker = st.text_input(
         "Ticker",
@@ -84,7 +84,6 @@ with top_left_cell:
 
 
 # timeframe selection
-
 with top_left_cell:
     timeframe = st.pills(
         "Timeframe",
@@ -101,7 +100,7 @@ with top_left_cell:
             value=True,
         )
 
-# DATA DISPLAY
+# -- DATA DISPLAY --
 right_cell = cols[1].container(border=True, height="stretch")
 
 
@@ -117,7 +116,7 @@ def retrieve_data() -> tuple[pd.DataFrame, pd.DataFrame]:
         with st.spinner("Fetching data..."):
             data = get_mention_data_1h(
                 ticker.upper(),
-                subreddits=subreddits,
+                subreddits=tuple(subreddits) if subreddits else None,
                 hours=int(timeframe_map[timeframe][:-1]),
             )
 
@@ -144,116 +143,121 @@ except Exception as e:
 
 # -- Display data --
 with right_cell:
-    if not df.empty:
-        if not price_df.empty:
-            fig = make_subplots(
-                rows=2, cols=1, shared_xaxes=True, row_heights=[0.7, 0.3]
+    if df.empty:
+        st.warning(
+            "No data to display. Please enter a ticker symbol and select a timeframe."
+        )
+        st.stop()
+
+    if not price_df.empty:
+        fig = make_subplots(rows=2, cols=1, shared_xaxes=True, row_heights=[0.7, 0.3])
+
+        if daily_bucket:
+            price_df = price_df.sort_values("timestamp")
+
+            price_df["timestamp"] = pd.to_datetime(price_df["timestamp"]).dt.floor("D")
+            price_df = (
+                price_df.groupby("timestamp").agg(close=("close", "last")).reset_index()
             )
 
-            if daily_bucket:
-                price_df = price_df.sort_values("timestamp")
-                df["timestamp"] = pd.to_datetime(df["timestamp"]).dt.floor("D")
-                df = (
-                    df.groupby(["timestamp", "subreddit"])
-                    .agg(
-                        mention_count=("mention_count", "sum"),
-                        unique_users=("unique_users", "max"),
-                        avg_sentiment=("avg_sentiment", "mean"),
-                    )
-                    .reset_index()
-                )
+        # price trace
+        fig.add_trace(
+            go.Scatter(x=price_df["timestamp"], y=price_df["close"], name="Close"),
+            row=1,
+            col=1,
+        )
+        bar_row, bar_col = 2, 1
+    else:
+        fig = go.Figure()
+        st.caption("Price data not available for this ticker and timeframe.")
+        bar_row, bar_col = None, None
 
-                price_df["timestamp"] = pd.to_datetime(price_df["timestamp"]).dt.floor(
-                    "D"
-                )
-                price_df = (
-                    price_df.groupby("timestamp")
-                    .agg(close=("close", "last"))
-                    .reset_index()
-                )
+    kwargs = {"row": bar_row, "col": bar_col} if bar_row else {}
 
-            df["colour"] = df["avg_sentiment"].apply(sentiment_to_colour)
+    # logic continues with or without price data
+    if daily_bucket:
+        df["timestamp"] = pd.to_datetime(df["timestamp"]).dt.floor("D")
+        df = (
+            df.groupby(["timestamp", "subreddit"])
+            .agg(
+                mention_count=("mention_count", "sum"),
+                unique_users=("unique_users", "max"),
+                avg_sentiment=("avg_sentiment", "mean"),
+            )
+            .reset_index()
+        )
 
-            # price trace
+    df["colour"] = df["avg_sentiment"].apply(sentiment_to_colour)
+
+    # Choose bar colours based on subreddit if multiple subreddits are present, otherwise use sentiment colours
+    if len(df["subreddit"].unique()) > 1:
+        colour_map = {
+            sub: px.colors.qualitative.Plotly[i]
+            for i, sub in enumerate(df["subreddit"].unique())
+        }
+        for sub, group in df.groupby("subreddit"):
             fig.add_trace(
-                go.Scatter(x=price_df["timestamp"], y=price_df["close"], name="Close"),
-                row=1,
-                col=1,
+                go.Bar(
+                    x=group["timestamp"],
+                    y=group["mention_count"],
+                    name=sub,
+                    marker_color=colour_map[sub],
+                ),
+                **kwargs,
             )
-
-            # Chose bar colours based on subreddit if multiple subreddits are present, otherwise use sentiment colours
-            if len(df["subreddit"].unique()) > 1:
-                colour_map = {
-                    sub: px.colors.qualitative.Plotly[i]
-                    for i, sub in enumerate(df["subreddit"].unique())
-                }
-                for sub, group in df.groupby("subreddit"):
-                    fig.add_trace(
-                        go.Bar(
-                            x=group["timestamp"],
-                            y=group["mention_count"],
-                            name=sub,
-                            marker_color=colour_map[sub],
-                        ),
-                        row=2,
-                        col=1,
-                    )
-            else:
-                fig.add_trace(
-                    go.Bar(
-                        x=df["timestamp"],
-                        y=df["mention_count"],
-                        name="Mentions(colour by sentiment)",
-                    ),
-                    row=2,
-                    col=1,
-                )
-                fig.update_traces(marker_color=df["colour"])
-
-        total_mentions = df["mention_count"].sum()
-        unique_users = df["unique_users"].max()
-        avg_sentiment = df["avg_sentiment"].mean()
-
-        col1, col2, col3 = st.columns(3)
-        col1.markdown(f"**Total Mentions**  \n{total_mentions:,}")
-        col2.markdown(f"**Unique Users**  \n{unique_users:,}")
-        col3.markdown(f"**Avg Sentiment**  \n{avg_sentiment:.2f}")
-
-        if len(df["subreddit"].unique()) > 1:
-            st.caption("💡 Select a single subreddit to colour bars by sentiment")
-
-        fig.update_layout(margin=dict(t=20, b=20, l=20, r=20))
-
-        fig.update_traces(
-            hovertemplate="<b>%{x}</b><br>Mentions: %{y}<br>Sentiment: %{customdata[0]:.2f}"
-        )
-
-        fig.update_layout(
-            legend=dict(
-                orientation="h",
-                y=1.02,  # just above the plot area
-                x=0.0,  # left aligned
-                xanchor="left",
-                yanchor="bottom",
+    else:
+        fig.add_trace(
+            go.Bar(
+                x=df["timestamp"],
+                y=df["mention_count"],
+                name="Mentions(colour by sentiment)",
             ),
-            barmode="stack",
+            **kwargs,
         )
+        fig.update_traces(marker_color=df["colour"])
 
-        # table view
-        table_df = df[
-            ["timestamp", "subreddit", "mention_count", "avg_sentiment"]
-        ].copy()
-        table_df["timestamp"] = pd.to_datetime(table_df["timestamp"]).dt.strftime(
-            "%Y-%m-%d %H:%M:%S"
-        )
+    total_mentions = df["mention_count"].sum()
+    unique_users = df["unique_users"].max()
+    avg_sentiment = df["avg_sentiment"].mean()
 
-        # tabs
-        tab_chart, tab_table = st.tabs(["Chart View", "Table View"])
+    col1, col2, col3 = st.columns(3)
+    col1.markdown(f"**Total Mentions**  \n{total_mentions:,}")
+    col2.markdown(f"**Unique Users**  \n{unique_users:,}")
+    col3.markdown(f"**Avg Sentiment**  \n{avg_sentiment:.2f}")
 
-        with tab_chart:
-            st.plotly_chart(fig, width="stretch")
-        with tab_table:
-            st.dataframe(table_df, width="stretch")
+    if len(df["subreddit"].unique()) > 1:
+        st.caption("💡 Select a single subreddit to colour bars by sentiment")
+
+    fig.update_layout(margin=dict(t=20, b=20, l=20, r=20))
+
+    fig.update_traces(
+        hovertemplate="<b>%{x}</b><br>Mentions: %{y}<br>Sentiment: %{customdata[0]:.2f}"
+    )
+
+    fig.update_layout(
+        legend=dict(
+            orientation="h",
+            y=1.02,  # just above the plot area
+            x=0.0,  # left aligned
+            xanchor="left",
+            yanchor="bottom",
+        ),
+        barmode="stack",
+    )
+
+    # table view
+    table_df = df[["timestamp", "subreddit", "mention_count", "avg_sentiment"]].copy()
+    table_df["timestamp"] = pd.to_datetime(table_df["timestamp"]).dt.strftime(
+        "%Y-%m-%d %H:%M:%S"
+    )
+
+    # tabs
+    tab_chart, tab_table = st.tabs(["Chart View", "Table View"])
+
+    with tab_chart:
+        st.plotly_chart(fig, width="stretch")
+    with tab_table:
+        st.dataframe(table_df, width="stretch")
 
 
 # -----------------------------------------------
@@ -325,82 +329,90 @@ else:
         hover_data=["timestamp"],
     )
 
-with left_cell:
-    """
-    ### Correlation Between Sentiment and Next Period Price Change
-    """
-    if daily_bucket:
-        st.warning("Correlation may be less meaningful with daily buckets enabled.")
+    with left_cell:
+        """
+        ### Correlation Between Sentiment and Next Period Price Change
+        """
+        if daily_bucket:
+            st.warning("Correlation may be less meaningful with daily buckets enabled.")
 
-    st.plotly_chart(fig_corr, width="stretch")
+        st.plotly_chart(fig_corr, width="stretch")
 
-with mid_cell:
-    """
-    ### Correlation Between Sentiment and Previous Period Price Change (Reactivity)
-    """
+    with mid_cell:
+        """
+        ### Correlation Between Sentiment and Previous Period Price Change (Reactivity)
+        """
 
-    if daily_bucket:
-        st.warning("Correlation may be less meaningful with daily buckets enabled.")
+        if daily_bucket:
+            st.warning("Correlation may be less meaningful with daily buckets enabled.")
 
-    st.plotly_chart(fig_reactive, width="stretch")
+        st.plotly_chart(fig_reactive, width="stretch")
 
-with right_cell:
-    """
-    ### Lag analysis + mention volume
-    """
+    with right_cell:
+        """
+        ### Lag analysis + mention volume
+        """
 
-    LAGS = [1, 2, 4, 6, 12, 24]
-
-    # aggregates per timestamp the weighted sentiment and total mention count
-    sentiment_df = (
-        df.groupby("timestamp")
-        .apply(
-            lambda x: pd.Series(
-                {
-                    "weighted_sentiment": np.average(
-                        x["avg_sentiment"], weights=x["mention_count"]
-                    ),
-                    "mention_count": x["mention_count"].sum(),
-                }
+        # Should only go head where timestamp <= 14 days
+        if timeframe_map[timeframe] not in ["336h", "720h"]:
+            st.warning(
+                "Lag analysis requires at least 14 days of data. Please select a longer timeframe to view this analysis."
             )
-        )
-        .reset_index()
-        .sort_values("timestamp")
-    )
+        else:
+            LAGS = [1, 2, 4, 6, 12, 24]
 
-    price_df_sorted = price_df.sort_values("timestamp")
-    price_df_sorted["price_change"] = price_df_sorted["close"].pct_change().shift(-1)
+            # aggregates per timestamp the weighted sentiment and total mention count
+            sentiment_df = (
+                df.groupby("timestamp")
+                .apply(
+                    lambda x: pd.Series(
+                        {
+                            "weighted_sentiment": np.average(
+                                x["avg_sentiment"], weights=x["mention_count"]
+                            ),
+                            "mention_count": x["mention_count"].sum(),
+                        }
+                    )
+                )
+                .reset_index()
+                .sort_values("timestamp")
+            )
 
-    # r-value
-    merged = pd.merge(
-        sentiment_df,
-        price_df_sorted[["timestamp", "price_change"]],
-        on="timestamp",
-        how="inner",
-    ).dropna()
+            price_df_sorted = price_df.sort_values("timestamp")
+            price_df_sorted["price_change"] = (
+                price_df_sorted["close"].pct_change().shift(-1)
+            )
 
-    lag_results = []
-    for lag in LAGS:
-        lagged = merged.copy()
-        lagged["price_change"] = lagged["price_change"].shift(-lag)
-        lagged = lagged.dropna()
-        if len(lagged) > 2:
-            r = lagged["weighted_sentiment"].corr(lagged["price_change"])
-            lag_results.append({"lag": lag, "r": r})
+            # r-value
+            merged = pd.merge(
+                sentiment_df,
+                price_df_sorted[["timestamp", "price_change"]],
+                on="timestamp",
+                how="inner",
+            ).dropna()
 
-    lag_df = pd.DataFrame(lag_results)
+            lag_results = []
+            for lag in LAGS:
+                lagged = merged.copy()
+                lagged["price_change"] = lagged["price_change"].shift(-lag)
+                lagged = lagged.dropna()
+                if len(lagged) > 2:
+                    r = lagged["weighted_sentiment"].corr(lagged["price_change"])
+                    lag_results.append({"lag": lag, "r": r})
 
-    fig_lag = px.bar(
-        lag_df,
-        x="lag",
-        y="r",
-        labels={"lag": "Lag (hours)", "r": "Correlation Coefficient"},
-        title="Correlation Between Sentiment and Future Price Change at Different Lags",
-    )
-    fig_lag.add_hline(y=0, line_dash="dash", line_color="grey")
-    fig_lag.update_layout(margin=dict(t=20, b=20, l=20, r=20))
+            lag_df = pd.DataFrame(lag_results)
 
-    st.plotly_chart(fig_lag, width="stretch")
+            fig_lag = px.bar(
+                lag_df,
+                x="lag",
+                y="r",
+                labels={"lag": "Lag (hours)", "r": "Correlation Coefficient"},
+                title="Correlation Between Sentiment and Future Price Change at Different Lags",
+            )
+            fig_lag.add_hline(y=0, line_dash="dash", line_color="grey")
+            fig_lag.update_layout(margin=dict(t=20, b=20, l=20, r=20))
+
+            st.plotly_chart(fig_lag, width="stretch")
 
 
 cols = st.columns([1, 2])

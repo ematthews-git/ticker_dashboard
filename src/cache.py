@@ -11,13 +11,13 @@ import pandas as pd
 # Cache output for 1 hour due to database updating hourly.
 @st.cache_data(ttl=3600)
 def get_mention_data_1h(
-    ticker: str, subreddits: list = None, hours: int = 12
+    ticker: str, subreddits: tuple = None, hours: int = 12
 ) -> pd.DataFrame:
     """Cache wrapper for fetch_mention_data.
 
     Args:
         ticker (str): The ticker to be searched for.
-        subreddits (list, optional): List of subreddits to filter by. Defaults to None (no filtering).
+        subreddits (tuple, optional): Tuple of subreddits to filter by. Defaults to None (no filtering).
         hours (int, optional): How many hours to lookback. Supabase inposes limit of 1000 items. Defaults to 12 hours.
 
     Returns:

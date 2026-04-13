@@ -19,7 +19,6 @@ SUBREDDITS = [
 ]
 
 timeframe_map = {
-    "1 Hour": "1h",
     "6 Hours": "6h",
     "12 Hours": "12h",
     "24 Hours": "24h",
