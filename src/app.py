@@ -17,6 +17,9 @@ st.title("Ticker Mentions Dashboard")
 
 configure_page()
 
+## -- variables needed across multiple cells --
+daily_bucket = False
+
 
 def render_ticker_bar(top_tickers: pd.DataFrame) -> None:
     """Render a bar across the top of the page featuring the top tickers daily.
@@ -31,7 +34,9 @@ def render_ticker_bar(top_tickers: pd.DataFrame) -> None:
         col.markdown(f"**{row.ticker}**  \n{row.mention_count:,} mentions")
 
 
-render_ticker_bar(get_top_tickers_12h())
+top_tickers_df = get_top_tickers_12h()
+if not top_tickers_df.empty:
+    render_ticker_bar(top_tickers_df)
 
 st.divider()
 
@@ -249,15 +254,67 @@ with right_cell:
         with tab_table:
             st.dataframe(table_df, width="stretch")
 
-# NEXT SECTION - see list of top tickers
 
-st.header("Most popular tickers")
+# -----------------------------------------------
+# NEXT ROW OF DISPLAY
+# -----------------------------------------------
 
-cols = st.columns([1, 2])
+cols = st.columns([1, 1, 1])
 
 left_cell = cols[0].container(border=True, height="stretch")
 
+right_cell = cols[1].container(border=True, height="content")
+
 with left_cell:
+    """
+    ### Correlation Between Sentiment and Next Period Price Change
+    """
+    if not ticker:
+        st.info("Please enter a ticker symbol to display correlation data.")
+    else:
+        sentiment_df = (
+            df.groupby("timestamp")
+            .agg(avg_sentiment=("avg_sentiment", "mean"))
+            .reset_index()
+            .sort_values("timestamp")
+        )
+
+        price_df_sorted = price_df.sort_values("timestamp")
+        price_df_sorted["price_change"] = (
+            price_df_sorted["close"].pct_change().shift(-1)
+        )
+
+        corr_df = pd.merge(
+            sentiment_df,
+            price_df_sorted[["timestamp", "price_change"]],
+            on="timestamp",
+            how="inner",
+        ).dropna()
+
+        fig_corr = px.scatter(
+            corr_df,
+            x="avg_sentiment",
+            y="price_change",
+            trendline="ols",
+            labels={
+                "avg_sentiment": "Sentiment",
+                "price_change": "Next Period Price Change",
+            },
+            hover_data=["timestamp"],
+        )
+        fig_corr.update_layout(margin=dict(t=20, b=20, l=20, r=20))
+
+        if daily_bucket:
+            st.warning("Correlation may be less meaningful with daily buckets enabled.")
+
+        st.plotly_chart(fig_corr, width="stretch")
+
+
+cols = st.columns([1, 2])
+
+bottom_left_cell = cols[0].container(border=True, height="stretch")
+
+with bottom_left_cell:
     hours = st.text_input(
         "Lookback Hours",
         value="12",
