@@ -149,6 +149,10 @@ with right_cell:
         )
         st.stop()
 
+    # save raw copies of dataframes for later use in correlation charts
+    df_raw = df.copy()
+    price_df_raw = price_df.copy()
+
     if not price_df.empty:
         fig = make_subplots(rows=2, cols=1, shared_xaxes=True, row_heights=[0.7, 0.3])
 
@@ -275,14 +279,24 @@ right_cell = cols[2].container(border=True, height="stretch")
 if not ticker:
     st.info("Please enter a ticker symbol to display correlation data.")
 else:
+    # aggregates per timestamp the weighted sentiment and total mention count
     sentiment_df = (
-        df.groupby("timestamp")
-        .agg(avg_sentiment=("avg_sentiment", "mean"))
+        df_raw.groupby("timestamp")
+        .apply(
+            lambda x: pd.Series(
+                {
+                    "weighted_sentiment": np.average(
+                        x["avg_sentiment"], weights=x["mention_count"]
+                    ),
+                    "mention_count": x["mention_count"].sum(),
+                }
+            )
+        )
         .reset_index()
         .sort_values("timestamp")
     )
 
-    price_df_sorted = price_df.sort_values("timestamp")
+    price_df_sorted = price_df_raw.sort_values("timestamp")
     price_df_sorted["price_change"] = price_df_sorted["close"].pct_change().shift(-1)
 
     corr_df = pd.merge(
@@ -294,11 +308,11 @@ else:
 
     fig_corr = px.scatter(
         corr_df,
-        x="avg_sentiment",
+        x="weighted_sentiment",
         y="price_change",
         trendline="ols",
         labels={
-            "avg_sentiment": "Sentiment",
+            "weighted_sentiment": "Sentiment",
             "price_change": "Next Period Price Change",
         },
         hover_data=["timestamp"],
@@ -314,7 +328,9 @@ else:
     ).dropna()
 
     # Shift sentiment forward instead of price
-    corr_df_reactive["next_sentiment"] = corr_df_reactive["avg_sentiment"].shift(-1)
+    corr_df_reactive["next_sentiment"] = corr_df_reactive["weighted_sentiment"].shift(
+        -1
+    )
     corr_df_reactive = corr_df_reactive.dropna()
 
     fig_reactive = px.scatter(
@@ -333,8 +349,6 @@ else:
         """
         ### Correlation Between Sentiment and Next Period Price Change
         """
-        if daily_bucket:
-            st.warning("Correlation may be less meaningful with daily buckets enabled.")
 
         st.plotly_chart(fig_corr, width="stretch")
 
@@ -342,9 +356,6 @@ else:
         """
         ### Correlation Between Sentiment and Previous Period Price Change (Reactivity)
         """
-
-        if daily_bucket:
-            st.warning("Correlation may be less meaningful with daily buckets enabled.")
 
         st.plotly_chart(fig_reactive, width="stretch")
 
@@ -363,7 +374,7 @@ else:
 
             # aggregates per timestamp the weighted sentiment and total mention count
             sentiment_df = (
-                df.groupby("timestamp")
+                df_raw.groupby("timestamp")
                 .apply(
                     lambda x: pd.Series(
                         {
@@ -378,7 +389,7 @@ else:
                 .sort_values("timestamp")
             )
 
-            price_df_sorted = price_df.sort_values("timestamp")
+            price_df_sorted = price_df_raw.sort_values("timestamp")
             price_df_sorted["price_change"] = (
                 price_df_sorted["close"].pct_change().shift(-1)
             )

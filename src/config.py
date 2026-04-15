@@ -11,7 +11,7 @@ supabase = create_client(url, key)
 
 SUBREDDITS = [
     "r/pennystocks",
-    "r/WallStreetBets",
+    "r/wallstreetbets",
     "r/SmallStreetBets",
     "r/Daytrading",
     "r/ShortSqueeze",
@@ -19,7 +19,6 @@ SUBREDDITS = [
 ]
 
 timeframe_map = {
-    "6 Hours": "6h",
     "12 Hours": "12h",
     "24 Hours": "24h",
     "3 Days": "72h",
