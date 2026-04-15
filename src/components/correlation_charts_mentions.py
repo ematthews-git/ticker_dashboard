@@ -1,11 +1,6 @@
 import streamlit as st
 import pandas as pd
 import plotly.express as px
-import numpy as np
-from config import timeframe_map
-from cache import (
-    get_top_tickers_1h,
-)
 
 
 def render_corr_charts_mentions(
@@ -26,13 +21,13 @@ def render_corr_charts_mentions(
         st.session_state.timeframe = st.query_params.get("timeframe", "3 Days")
 
     ticker = st.session_state.ticker
-    timeframe = st.session_state.timeframe
+    # timeframe = st.session_state.timeframe
 
     cols = st.columns([1, 1, 1])
 
     left_cell = cols[0].container(border=True, height="stretch")
     mid_cell = cols[1].container(border=True, height="content")
-    right_cell = cols[2].container(border=True, height="stretch")
+    # right_cell = cols[2].container(border=True, height="stretch")
 
     # Create predictive and reactive correlation charts
     # PREDICTIVE

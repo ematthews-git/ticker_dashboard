@@ -19,5 +19,11 @@ configure_page()
 daily_bucket = False
 
 df_raw, price_df_raw = render_primary_row(daily_bucket=daily_bucket)
-render_correlation_charts(df_raw, price_df_raw)
-render_corr_charts_mentions(df_raw, price_df_raw)
+
+tab_correlation, tab_mentions = st.tabs(
+    ["Correlation Between Sentiment+Mentions and Price Change", "not yet implemented"]
+)
+
+with tab_correlation:
+    render_correlation_charts(df_raw, price_df_raw)
+    render_corr_charts_mentions(df_raw, price_df_raw)

@@ -6,6 +6,7 @@ from config import timeframe_map
 from cache import (
     get_top_tickers_1h,
 )
+from utils import aggregate_sentiment_to_timestamp
 
 
 def render_correlation_charts(df_raw: pd.DataFrame, price_df_raw: pd.DataFrame) -> None:
@@ -38,21 +39,7 @@ def render_correlation_charts(df_raw: pd.DataFrame, price_df_raw: pd.DataFrame) 
         st.info("Please enter a ticker symbol to display correlation data.")
     else:
         # aggregates per timestamp the weighted sentiment and total mention count
-        sentiment_df = (
-            df_raw.groupby("timestamp")
-            .apply(
-                lambda x: pd.Series(
-                    {
-                        "weighted_sentiment": np.average(
-                            x["avg_sentiment"], weights=x["mention_count"]
-                        ),
-                        "mention_count": x["mention_count"].sum(),
-                    }
-                )
-            )
-            .reset_index()
-            .sort_values("timestamp")
-        )
+        sentiment_df = aggregate_sentiment_to_timestamp(df_raw, weighted=True)
 
         price_df_sorted = price_df_raw.sort_values("timestamp")
         price_df_sorted["price_change"] = (
@@ -134,21 +121,7 @@ def render_correlation_charts(df_raw: pd.DataFrame, price_df_raw: pd.DataFrame) 
                 LAGS = [1, 2, 4, 6, 12, 24]
 
                 # aggregates per timestamp the weighted sentiment and total mention count
-                sentiment_df = (
-                    df_raw.groupby("timestamp")
-                    .apply(
-                        lambda x: pd.Series(
-                            {
-                                "weighted_sentiment": np.average(
-                                    x["avg_sentiment"], weights=x["mention_count"]
-                                ),
-                                "mention_count": x["mention_count"].sum(),
-                            }
-                        )
-                    )
-                    .reset_index()
-                    .sort_values("timestamp")
-                )
+                sentiment_df = aggregate_sentiment_to_timestamp(df_raw, weighted=True)
 
                 price_df_sorted = price_df_raw.sort_values("timestamp")
                 price_df_sorted["price_change"] = (

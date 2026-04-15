@@ -4,6 +4,7 @@ Utils for the entire ticker_dashboard application.
 
 import streamlit as st
 import numpy as np
+import pandas as pd
 
 
 def configure_page() -> None:
@@ -67,3 +68,42 @@ def sentiment_to_colour(sentiment: float) -> str:
 
     r, g, b = int(rgb[0]), int(rgb[1]), int(rgb[2])
     return f"#{r:02x}{g:02x}{b:02x}"
+
+
+def aggregate_sentiment_to_timestamp(
+    df: pd.DataFrame, weighted: bool = True
+) -> pd.DataFrame:
+    """Aggregate sentiment scores to the timestamp level by calculating a weighted average sentiment for each timestamp.
+
+    Args:
+        df (pd.DataFrame): DataFrame containing 'timestamp', 'mention_count', and 'avg_sentiment' columns.
+        weighted (bool): Whether to calculate a weighted average sentiment.
+
+    Returns:
+        pd.DataFrame: DataFrame with 'timestamp' and 'weighted_sentiment' columns.
+    """
+    if weighted:
+        sentiment_df = (
+            df.groupby("timestamp")
+            .apply(
+                lambda x: pd.Series(
+                    {
+                        "weighted_sentiment": np.average(
+                            x["avg_sentiment"], weights=x["mention_count"]
+                        ),
+                        "mention_count": x["mention_count"].sum(),
+                    }
+                )
+            )
+            .reset_index()
+            .sort_values("timestamp")
+        )
+    else:
+        sentiment_df = (
+            df.groupby("timestamp")
+            .apply(lambda x: x["avg_sentiment"].mean())
+            .reset_index()
+            .sort_values("timestamp")
+        )
+
+    return sentiment_df

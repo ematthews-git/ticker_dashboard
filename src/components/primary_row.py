@@ -1,9 +1,10 @@
 import streamlit as st
 import pandas as pd
+import numpy as np
 import plotly.express as px
 from plotly.subplots import make_subplots
 from plotly import graph_objects as go
-from utils import sentiment_to_colour
+from utils import sentiment_to_colour, aggregate_sentiment_to_timestamp
 from config import SUBREDDITS, timeframe_map
 from cache import (
     get_mention_data_1h,
@@ -136,13 +137,13 @@ def render_primary_row(
             return pd.DataFrame(), pd.DataFrame()
 
     # Get data
+    df, price_df = pd.DataFrame(), pd.DataFrame()
     try:
         df, price_df = retrieve_data()
 
     except Exception as e:
         st.error(f"An error occurred while fetching data: {e}")
 
-    # -- Display data --
     with right_cell:
         if df.empty:
             st.warning(
@@ -150,13 +151,22 @@ def render_primary_row(
             )
             st.stop()
 
-        # save raw copies of dataframes for later use in correlation charts
+        # save raw copies of dataframes - used for return
         df_raw = df.copy()
         price_df_raw = price_df.copy()
 
         if not price_df.empty:
             fig = make_subplots(
-                rows=2, cols=1, shared_xaxes=True, row_heights=[0.7, 0.3]
+                rows=2,
+                cols=1,
+                shared_xaxes=True,
+                row_heights=[0.7, 0.3],
+                specs=[[{"secondary_y": True}], [{"secondary_y": False}]],
+            )
+
+            sentiment_df = aggregate_sentiment_to_timestamp(df_raw, weighted=True)
+            sentiment_df = sentiment_df.rename(
+                columns={"weighted_sentiment": "avg_sentiment"}
             )
 
             if daily_bucket:
@@ -197,6 +207,28 @@ def render_primary_row(
                 )
                 .reset_index()
             )
+
+            # now adjust sentiment df
+            sentiment_df["timestamp"] = pd.to_datetime(
+                sentiment_df["timestamp"]
+            ).dt.floor("D")
+            sentiment_df = (
+                df.groupby("timestamp")
+                .agg(avg_sentiment=("avg_sentiment", "mean"))
+                .reset_index()
+            )
+
+        # sentiment line
+        if not sentiment_df.empty:
+            fig.add_trace(
+                go.Scatter(
+                    x=sentiment_df["timestamp"],
+                    y=sentiment_df["avg_sentiment"],
+                    name="Sentiment",
+                    yaxis="y2",
+                ),
+            )
+            fig.update_yaxes(range=[-1, 1], secondary_y=True, row=1, col=1)
 
         df["colour"] = df["avg_sentiment"].apply(sentiment_to_colour)
 
