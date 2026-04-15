@@ -76,6 +76,7 @@ def render_correlation_charts(df_raw: pd.DataFrame, price_df_raw: pd.DataFrame) 
                 "price_change": "Next Period Price Change",
             },
             hover_data=["timestamp"],
+            title="Correlation Between Sentiment and Next Period Price Change (Predictive)",
         )
         fig_corr.update_layout(margin=dict(t=20, b=20, l=20, r=20))
 
@@ -103,6 +104,7 @@ def render_correlation_charts(df_raw: pd.DataFrame, price_df_raw: pd.DataFrame) 
                 "next_sentiment": "Next Period Sentiment",
             },
             hover_data=["timestamp"],
+            title="Correlation Between Sentiment and Previous Period Price Change (Reactivity)",
         )
 
         with left_cell:
@@ -113,11 +115,10 @@ def render_correlation_charts(df_raw: pd.DataFrame, price_df_raw: pd.DataFrame) 
             st.plotly_chart(fig_corr, width="stretch")
 
         with mid_cell:
-            """
-            ### Correlation Between Sentiment and Previous Period Price Change (Reactivity)
-            """
-
-            st.plotly_chart(fig_reactive, width="stretch")
+            st.plotly_chart(
+                fig_reactive,
+                width="stretch",
+            )
 
         with right_cell:
             """
@@ -173,18 +174,25 @@ def render_correlation_charts(df_raw: pd.DataFrame, price_df_raw: pd.DataFrame) 
 
                 lag_df = pd.DataFrame(lag_results)
 
-                fig_lag = px.bar(
-                    lag_df,
-                    x="lag",
-                    y="r",
-                    labels={"lag": "Lag (hours)", "r": "Correlation Coefficient"},
-                    title="Correlation Between Sentiment and Future Price Change at Different Lags",
-                )
-                fig_lag.add_hline(y=0, line_dash="dash", line_color="grey")
-                fig_lag.update_layout(margin=dict(t=20, b=20, l=20, r=20))
+                if not lag_df.empty:
+                    fig_lag = px.bar(
+                        lag_df,
+                        x="lag",
+                        y="r",
+                        labels={"lag": "Lag (hours)", "r": "Correlation Coefficient"},
+                        title="Correlation Between Sentiment and Future Price Change at Different Lags",
+                    )
+                    fig_lag.add_hline(y=0, line_dash="dash", line_color="grey")
+                    fig_lag.update_layout(margin=dict(t=20, b=20, l=20, r=20))
 
-                st.plotly_chart(fig_lag, width="stretch")
+                    st.plotly_chart(fig_lag, width="stretch")
+                else:
+                    st.info(
+                        "Not enough data points to perform lag analysis. Please select a longer timeframe or a more popular ticker."
+                    )
 
+
+def render_top_tickers() -> None:
     cols = st.columns([1, 2])
 
     bottom_left_cell = cols[0].container(border=True, height="stretch")
