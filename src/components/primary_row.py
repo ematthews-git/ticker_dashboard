@@ -1,6 +1,7 @@
 import streamlit as st
 import pandas as pd
 import numpy as np
+from datetime import datetime, timedelta, timezone
 import plotly.express as px
 from plotly.subplots import make_subplots
 from plotly import graph_objects as go
@@ -44,6 +45,8 @@ def render_primary_row(
     st.divider()
 
     cols = st.columns([1, 3])
+    top_left_cell = cols[0].container(border=True)
+    bottom_left_cell = cols[0].container(border=True, vertical_alignment="bottom")
 
     # SUBREDDIT SELECTION
     if "subreddits" not in st.session_state:
@@ -58,11 +61,7 @@ def render_primary_row(
         else:
             st.query_params.pop("subreddits", None)
 
-    top_left_cell = cols[0].container(
-        border=True, height="stretch", vertical_alignment="bottom"
-    )
-
-    with top_left_cell:
+    with bottom_left_cell:
         # Selecter box for subreddits
         subreddits = st.multiselect(
             "Subreddits",
@@ -75,7 +74,7 @@ def render_primary_row(
         )
 
     # Ticker selection
-    with top_left_cell:
+    with bottom_left_cell:
         ticker = st.text_input(
             "Ticker",
             value=st.query_params.get("ticker", "").upper(),
@@ -83,7 +82,7 @@ def render_primary_row(
         )
 
     # timeframe selection
-    with top_left_cell:
+    with bottom_left_cell:
         timeframe = st.pills(
             "Timeframe",
             options=list(timeframe_map.keys()),
@@ -107,39 +106,46 @@ def render_primary_row(
     # -- DATA DISPLAY --
     right_cell = cols[1].container(border=True, height="stretch")
 
-    def retrieve_data() -> tuple[pd.DataFrame, pd.DataFrame]:
+    def retrieve_data() -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
         """Retrieve data using client function.
 
         Uses the ticker, subreddits, and timeframe selected by the user to fetch data from the database.
 
         Returns:
-            tuple[mention_data, price_data]: A tuple containing the mention data and price data dataframes.
+            tuple[delta_data, mention_data, price_data]: A tuple containing the delta data(before the timeframe) mention data and price data dataframes.
         """
         if ticker:
             with st.spinner("Fetching data..."):
+                hours = int((timeframe_map[timeframe][:-1]))
+
                 data = get_mention_data_1h(
                     ticker.upper(),
                     subreddits=tuple(subreddits) if subreddits else None,
-                    hours=int(timeframe_map[timeframe][:-1]),
+                    hours=hours * 2,
                 )
+
+                middle_time = pd.Timestamp.now(tz="UTC") - pd.Timedelta(hours=hours)
+
+                delta_data = data[data["timestamp"] < middle_time.isoformat()]
+                data = data[data["timestamp"] >= middle_time.isoformat()]
 
                 price_data = get_price_data_1h(
                     ticker.upper(), hours=int(timeframe_map[timeframe][:-1])
                 )
 
                 if not data.empty:
-                    return data, price_data
+                    return delta_data, data, price_data
                 else:
                     st.warning("No data found for the specified ticker and timeframe.")
-                    return pd.DataFrame(), pd.DataFrame()
+                    return pd.DataFrame(), pd.DataFrame(), pd.DataFrame()
         else:
             st.info("Please enter a ticker symbol to display data.")
-            return pd.DataFrame(), pd.DataFrame()
+            return pd.DataFrame(), pd.DataFrame(), pd.DataFrame()
 
     # Get data
-    df, price_df = pd.DataFrame(), pd.DataFrame()
+    delta_df, df, price_df = pd.DataFrame(), pd.DataFrame(), pd.DataFrame()
     try:
-        df, price_df = retrieve_data()
+        delta_df, df, price_df = retrieve_data()
 
     except Exception as e:
         st.error(f"An error occurred while fetching data: {e}")
@@ -149,7 +155,7 @@ def render_primary_row(
             st.warning(
                 "No data to display. Please enter a ticker symbol and select a timeframe."
             )
-            st.stop()
+            st.stop()  # stops here - check not needed anywhere lower
 
         # save raw copies of dataframes - used for return
         df_raw = df.copy()
@@ -303,6 +309,38 @@ def render_primary_row(
             st.plotly_chart(fig, width="stretch")
         with tab_table:
             st.dataframe(table_df, width="stretch")
+
+    with top_left_cell:
+        # pie not needed if only one subreddit present
+        if len(df["subreddit"].unique()) > 1:
+            pie_df = (
+                df.groupby("subreddit")
+                .agg(mention_count=("mention_count", "sum"))
+                .reset_index()
+            )
+
+            pie_fig = px.pie(
+                pie_df,
+                names="subreddit",
+                values="mention_count",
+                color="subreddit",
+                color_discrete_map=colour_map,  # only available with >1 subreddits
+            )
+            pie_fig.update_layout(
+                margin=dict(t=10, b=10, l=10, r=10), showlegend=False, height=200
+            )
+
+            st.plotly_chart(pie_fig, width="stretch")
+
+        current_mentions = df_raw["mention_count"].sum()
+        previous_mentions = delta_df["mention_count"].sum()
+        delta_mentions = current_mentions - previous_mentions
+
+        st.metric(
+            label="Total Mentions",
+            value=f"{current_mentions:,}",
+            delta=f"{delta_mentions:,}",
+        )
 
     # Finishing code
     return df_raw, price_df_raw
