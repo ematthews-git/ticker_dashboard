@@ -89,6 +89,10 @@ def render_primary_row(
             default="3 Days",
         )
 
+        if not timeframe:
+            st.warning("Please select a timeframe.")
+            st.stop()
+
         # bucket option
         daily_bucket = False
         if timeframe_map[timeframe] in ["168h", "336h", "720h"]:
@@ -146,7 +150,6 @@ def render_primary_row(
     delta_df, df, price_df = pd.DataFrame(), pd.DataFrame(), pd.DataFrame()
     try:
         delta_df, df, price_df = retrieve_data()
-
     except Exception as e:
         st.error(f"An error occurred while fetching data: {e}")
 
@@ -161,6 +164,11 @@ def render_primary_row(
         df_raw = df.copy()
         price_df_raw = price_df.copy()
 
+        sentiment_df = aggregate_sentiment_to_timestamp(df_raw, weighted=True)
+        sentiment_df = sentiment_df.rename(
+            columns={"weighted_sentiment": "avg_sentiment"}
+        )
+
         if not price_df.empty:
             fig = make_subplots(
                 rows=2,
@@ -168,11 +176,6 @@ def render_primary_row(
                 shared_xaxes=True,
                 row_heights=[0.7, 0.3],
                 specs=[[{"secondary_y": True}], [{"secondary_y": False}]],
-            )
-
-            sentiment_df = aggregate_sentiment_to_timestamp(df_raw, weighted=True)
-            sentiment_df = sentiment_df.rename(
-                columns={"weighted_sentiment": "avg_sentiment"}
             )
 
             if daily_bucket:
@@ -198,6 +201,7 @@ def render_primary_row(
             fig = go.Figure()
             st.caption("Price data not available for this ticker and timeframe.")
             bar_row, bar_col = None, None
+            sentiment_df = None
 
         kwargs = {"row": bar_row, "col": bar_col} if bar_row else {}
 
@@ -208,7 +212,7 @@ def render_primary_row(
                 df.groupby(["timestamp", "subreddit"])
                 .agg(
                     mention_count=("mention_count", "sum"),
-                    unique_users=("unique_users", "max"),
+                    unique_users=("unique_users", "sum"),
                     avg_sentiment=("avg_sentiment", "mean"),
                 )
                 .reset_index()
@@ -225,7 +229,7 @@ def render_primary_row(
             )
 
         # sentiment line
-        if not sentiment_df.empty:
+        if sentiment_df is not None and not sentiment_df.empty:
             fig.add_trace(
                 go.Scatter(
                     x=sentiment_df["timestamp"],
@@ -266,12 +270,12 @@ def render_primary_row(
             fig.update_traces(marker_color=df["colour"])
 
         total_mentions = df["mention_count"].sum()
-        unique_users = df["unique_users"].max()
+        unique_users = df["unique_users"].mean()
         avg_sentiment = df["avg_sentiment"].mean()
 
         col1, col2, col3 = st.columns(3)
         col1.markdown(f"**Total Mentions**  \n{total_mentions:,}")
-        col2.markdown(f"**Unique Users**  \n{unique_users:,}")
+        col2.markdown(f"**Average Users per Time Bucket**  \n{unique_users:.0f}")
         col3.markdown(f"**Avg Sentiment**  \n{avg_sentiment:.2f}")
 
         if len(df["subreddit"].unique()) > 1:
