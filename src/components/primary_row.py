@@ -24,23 +24,46 @@ def render_primary_row(
     Returns:
         tuple[pd.DataFrame, pd.DataFrame]: The raw mention data and price data dataframes used for the correlation charts.
     """
-
-    # displays across top of page
-    def render_ticker_bar(top_tickers: pd.DataFrame) -> None:
-        """Render a bar across the top of the page featuring the top tickers daily.
-
-        Args:
-            top_tickers (pd.DataFrame): Dataframe containing top tickers with columns 'ticker' and 'mention_count'.
-        """
-        st.markdown("#### Top Daily Tickers")
-
-        cols = st.columns(len(top_tickers))
-        for col, row in zip(cols, top_tickers.itertuples()):
-            col.markdown(f"**{row.ticker}**  \n{row.total_mentions:,} mentions")
+    if "ticker" not in st.session_state:
+        st.session_state.ticker = st.query_params.get("ticker", "").upper()
 
     top_tickers_df = get_top_tickers_12h()
+
+    def on_pill_select():
+        """Callback function to update ticker when a pill is selected."""
+        selected = st.session_state.ticker_pill
+        if selected:
+            st.session_state.ticker = selected.split("(")[0].strip()
+            st.query_params["ticker"] = st.session_state.ticker
+
+    def on_text_change():
+        """Callback function to update ticker when a ticker is entered."""
+        st.session_state.ticker = st.session_state.ticker_input.upper()
+        st.session_state.ticker_pill = None  # deselect
+        if st.session_state.ticker:
+            st.query_params["ticker"] = st.session_state.ticker
+        else:
+            st.query_params.pop("ticker", None)
+
     if not top_tickers_df.empty:
-        render_ticker_bar(top_tickers_df)
+        options = [
+            f"{row.ticker} ({row.total_mentions:,})"
+            for row in top_tickers_df.itertuples()
+        ]
+        # preselect according to session state
+        curr = next(
+            (o for o in options if o.startswith(st.session_state.ticker + " ")),
+            None,
+        )
+        st.markdown("#### Top Daily Tickers")
+        st.pills(
+            "Select here to view graphs or enter below",
+            options=options,
+            default=curr,
+            key="ticker_pill",
+            on_change=on_pill_select,
+            width="stretch",
+        )
 
     st.divider()
 
@@ -75,10 +98,12 @@ def render_primary_row(
 
     # Ticker selection
     with bottom_left_cell:
-        ticker = st.text_input(
+        st.text_input(
             "Ticker",
-            value=st.query_params.get("ticker", "").upper(),
+            value=st.session_state.ticker,
             placeholder="Enter a ticker symbol (e.g. AAPL)",
+            key="ticker_input",
+            on_change=on_text_change,
         )
 
     # timeframe selection
@@ -103,10 +128,11 @@ def render_primary_row(
             )
 
     # Add selections to session state
-    st.session_state.ticker = ticker
     st.session_state.timeframe = timeframe
     st.session_state.subreddits = subreddits
     st.session_state.daily_bucket = daily_bucket
+
+    ticker = st.session_state.ticker
 
     # -- DATA DISPLAY --
     right_cell = cols[1].container(border=True, height="stretch")
