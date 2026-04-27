@@ -63,9 +63,8 @@ def render_correlation_charts(df_raw: pd.DataFrame, price_df_raw: pd.DataFrame) 
                 "price_change": "Next Period Price Change",
             },
             hover_data=["timestamp"],
-            title="Correlation Between Sentiment and Next Period Price Change (Predictive)",
         )
-        fig_corr.update_layout(margin=dict(t=20, b=20, l=20, r=20))
+        fig_corr.update_layout(margin=dict(t=30, b=20, l=20, r=20))
 
         # REACTIVE
         corr_df_reactive = pd.merge(
@@ -91,33 +90,33 @@ def render_correlation_charts(df_raw: pd.DataFrame, price_df_raw: pd.DataFrame) 
                 "next_sentiment": "Next Period Sentiment",
             },
             hover_data=["timestamp"],
-            title="Correlation Between Sentiment and Previous Period Price Change (Reactivity)",
         )
 
         with left_cell:
-            """
-            ### Correlation Between Sentiment and Next Period Price Change
-            """
-
+            st.subheader(
+                "Correlation Between Sentiment and Next Period Price Change (Predictive)"
+            )
             st.plotly_chart(fig_corr, width="stretch")
 
         with mid_cell:
+            st.subheader(
+                "Correlation Between Sentiment and Previous Period Price Change (Reactivity)"
+            )
             st.plotly_chart(
                 fig_reactive,
                 width="stretch",
             )
 
         with right_cell:
-            """
-            ### Lag analysis + mention volume
-            """
-
             # Should only go head where timestamp <= 14 days
             if timeframe_map[timeframe] not in ["336h", "720h"]:
                 st.warning(
                     "Lag analysis requires at least 14 days of data. Please select a longer timeframe to view this analysis."
                 )
             else:
+                st.subheader(
+                    "Correlation Between Sentiment and Future Price Change at Different Lags"
+                )
                 LAGS = [1, 2, 4, 6, 12, 24]
 
                 # aggregates per timestamp the weighted sentiment and total mention count
@@ -153,7 +152,6 @@ def render_correlation_charts(df_raw: pd.DataFrame, price_df_raw: pd.DataFrame) 
                         x="lag",
                         y="r",
                         labels={"lag": "Lag (hours)", "r": "Correlation Coefficient"},
-                        title="Correlation Between Sentiment and Future Price Change at Different Lags",
                     )
                     fig_lag.add_hline(y=0, line_dash="dash", line_color="grey")
                     fig_lag.update_layout(margin=dict(t=20, b=20, l=20, r=20))

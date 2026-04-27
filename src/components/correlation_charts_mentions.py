@@ -65,11 +65,13 @@ def render_corr_charts_mentions(
                 "price_change": "Next Period Price Change",
             },
             hover_data=["timestamp"],
-            title="Correlation Between Mention Count and Next Period Price Change (Predictive)",
         )
         fig_corr.update_layout(margin=dict(t=20, b=20, l=20, r=20))
 
         with left_cell:
+            st.subheader(
+                "Correlation Between Mention Count and Next Period Price Change (Predictive)"
+            )
             st.plotly_chart(
                 fig_corr,
                 width="stretch",
@@ -98,15 +100,13 @@ def render_corr_charts_mentions(
                 "price_change": "Price Change",
             },
             hover_data=["timestamp"],
-            title="Correlation Between Mention Count and Next Period Price Change (Reactivity)",
         )
         fig_reactive.update_layout(margin=dict(t=20, b=20, l=20, r=20))
 
         with mid_cell:
-            """
-            ### Correlation Between Mention Count and Next Period Price Change (Reactivity)
-            """
-
+            st.subheader(
+                "Correlation Between Mention Count and Next Period Price Change (Reactivity)"
+            )
             st.plotly_chart(
                 fig_reactive,
                 width="stretch",

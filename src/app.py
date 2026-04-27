@@ -31,5 +31,8 @@ with tab_mentions:
     render_mention_heatmap(df_raw)
 
 with tab_correlation:
-    render_correlation_charts(df_raw, price_df_raw)
-    render_corr_charts_mentions(df_raw, price_df_raw)
+    if len(price_df_raw) > 6:
+        render_correlation_charts(df_raw, price_df_raw)
+        render_corr_charts_mentions(df_raw, price_df_raw)
+    else:
+        st.warning("Requires at least one day of price data.")
