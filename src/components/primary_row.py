@@ -106,6 +106,7 @@ def render_primary_row(
     st.session_state.ticker = ticker
     st.session_state.timeframe = timeframe
     st.session_state.subreddits = subreddits
+    st.session_state.daily_bucket = daily_bucket
 
     # -- DATA DISPLAY --
     right_cell = cols[1].container(border=True, height="stretch")

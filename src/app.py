@@ -9,6 +9,7 @@ from utils import configure_page
 from components.primary_row import render_primary_row
 from components.correlation_charts import render_correlation_charts
 from components.correlation_charts_mentions import render_corr_charts_mentions
+from components.mention_charts import render_mention_trends, render_mention_heatmap
 
 
 st.title("Ticker Mentions Dashboard")
@@ -21,9 +22,13 @@ daily_bucket = False
 df_raw, price_df_raw = render_primary_row(daily_bucket=daily_bucket)
 
 tab_correlation, tab_mentions = st.tabs(
-    ["Correlation Between Sentiment+Mentions and Price Change", "not yet implemented"]
+    ["Correlation Between Sentiment+Mentions and Price Change", "Mention Trends"]
 )
 
 with tab_correlation:
     render_correlation_charts(df_raw, price_df_raw)
     render_corr_charts_mentions(df_raw, price_df_raw)
+
+with tab_mentions:
+    render_mention_trends(df_raw)
+    render_mention_heatmap(df_raw)
