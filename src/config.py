@@ -1,11 +1,12 @@
 import os
+import streamlit as st
 from dotenv import load_dotenv
 from supabase import create_client
 
 load_dotenv()
 
-url = os.getenv("SUPABASE_URL")
-key = os.getenv("SUPABASE_KEY")
+url = st.secrets.get("SUPABASE_URL") or os.getenv("SUPABASE_URL")
+key = st.secrets.get("SUPABASE_KEY") or os.getenv("SUPABASE_KEY")
 
 supabase = create_client(url, key)
 

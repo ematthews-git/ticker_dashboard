@@ -20,35 +20,53 @@ def configure_page() -> None:
         st.markdown("""
             **IMPORTANT:** \
             This is a small side project. Data may be inaccurate in places.
-            Also note, significant methodology changes have been made recently.
+            Also note, significant methodology changes have been made recently:
             Data before May did not include mentions that were written in lowercase.
             Getting strong post coverage has been an ongoing goal.
-            Data before May might have a non-negligable count of missing posts(this is an issue for WSB,
-            other subreddits have a much lower number of posts made and are therefore easier to get strong post coverage.).
-            And finally, a large improvement to sentiment scoring was rolled out late April.
+            Data before May may have a non-negligible count of missing posts(Especially WSB due to it's high volume;
+                    other subreddits have much better coverage.).
+            Additionally, a large improvement to sentiment scoring was rolled out late April.
             **PLEASE - look at the correlation charts. Reddit buzz is not a reliable predictor of stock price.**
         """)
 
     app_style = """
     <style>
     /*#MainMenu {visibility: visible;}*/
-    footer {visibility: visible;}
-    footer:after {
-        content: "Copyright © 2026 Ethan M. All rights reserved.";
-        visibility: visible;
-        display: block;
-        position: fixed;
-        bottom: 0;
-        left: 0;
-        width: 100%;
-        text-align: center;
-        padding: 10px;
-        color: grey;
-        font-size: 0.85rem;
-    }
+    footer {visibility: hidden;}
     </style>
     """
     st.markdown(app_style, unsafe_allow_html=True)
+
+    st.markdown(
+        """
+        <style>
+        .custom-footer {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            width: 100%;
+            text-align: center;
+            padding: 10px;
+            color: grey;
+            font-size: 0.85rem;
+            background: transparent;
+            z-index: 9999;
+        }
+        .custom-footer a {
+            color: #888;
+            text-decoration: none;
+        }
+        .custom-footer a:hover {
+            color: #ccc;
+        }
+        </style>
+        <div class="custom-footer">
+            Copyright &copy; 2026 Ethan M. &nbsp;|&nbsp;
+            <a href="https://github.com/ematthews-git" target="_blank">GitHub</a>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
 
 
 def sentiment_to_colour(sentiment: float) -> str:
