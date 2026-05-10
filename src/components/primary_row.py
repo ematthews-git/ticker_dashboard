@@ -1,7 +1,5 @@
 import streamlit as st
 import pandas as pd
-import numpy as np
-from datetime import datetime, timedelta, timezone
 import plotly.express as px
 from plotly.subplots import make_subplots
 from plotly import graph_objects as go
@@ -219,7 +217,12 @@ def render_primary_row(
 
             # price trace
             fig.add_trace(
-                go.Scatter(x=price_df["timestamp"], y=price_df["close"], name="Close"),
+                go.Scatter(
+                    x=price_df["timestamp"],
+                    y=price_df["close"],
+                    name="Close",
+                    hovertemplate="<b>%{x}</b><br>Price: $%{y:.2f}<extra></extra>",
+                ),
                 row=1,
                 col=1,
             )
@@ -263,6 +266,7 @@ def render_primary_row(
                     y=sentiment_df["avg_sentiment"],
                     name="Sentiment",
                     yaxis="y2",
+                    hovertemplate="<b>%{x}</b><br>Sentiment: %{y:.2f}<extra></extra>",
                 ),
             )
             fig.update_yaxes(range=[-1, 1], secondary_y=True, row=1, col=1)
@@ -282,6 +286,7 @@ def render_primary_row(
                         y=group["mention_count"],
                         name=sub,
                         marker_color=colour_map[sub],
+                        hovertemplate="<b>%{x}</b><br>%{fullData.name}<br>Mentions: %{y}<extra></extra>",
                     ),
                     **kwargs,
                 )
@@ -290,11 +295,16 @@ def render_primary_row(
                 go.Bar(
                     x=df["timestamp"],
                     y=df["mention_count"],
-                    name="Mentions(colour by sentiment)",
+                    name="Mentions (colour by sentiment)",
+                    customdata=df[["avg_sentiment"]].values,
+                    hovertemplate="<b>%{x}</b><br>Mentions: %{y}<br>Sentiment: %{customdata[0]:.2f}<extra></extra>",
                 ),
                 **kwargs,
             )
-            fig.update_traces(marker_color=df["colour"])
+            fig.update_traces(
+                marker_color=df["colour"],
+                selector=dict(name="Mentions (colour by sentiment)"),
+            )
 
         total_mentions = df["mention_count"].sum()
         unique_users = df["unique_users"].mean()
@@ -309,10 +319,6 @@ def render_primary_row(
             st.caption("💡 Select a single subreddit to colour bars by sentiment")
 
         fig.update_layout(margin=dict(t=20, b=20, l=20, r=20))
-
-        fig.update_traces(
-            hovertemplate="<b>%{x}</b><br>Mentions: %{y}<br>Sentiment: %{customdata[0]:.2f}"
-        )
 
         fig.update_layout(
             legend=dict(

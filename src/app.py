@@ -11,10 +11,8 @@ from components.correlation_charts import render_correlation_charts
 from components.correlation_charts_mentions import render_corr_charts_mentions
 from components.mention_charts import render_mention_trends, render_mention_heatmap
 
-
-st.title("Ticker Mentions Dashboard")
-
 configure_page()
+st.title("Ticker Mentions Dashboard")
 
 ## -- variables needed across multiple cells --
 daily_bucket = False

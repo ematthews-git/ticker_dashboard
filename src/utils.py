@@ -16,10 +16,23 @@ def configure_page() -> None:
         initial_sidebar_state="expanded",
     )
 
+    with st.expander("Data Disclaimer"):
+        st.markdown("""
+            **IMPORTANT:** \
+            This is a small side project. Data may be inaccurate in places.
+            Also note, significant methodology changes have been made recently.
+            Data before May did not include mentions that were written in lowercase.
+            Getting strong post coverage has been an ongoing goal.
+            Data before May might have a non-negligable count of missing posts(this is an issue for WSB,
+            other subreddits have a much lower number of posts made and are therefore easier to get strong post coverage.).
+            And finally, a large improvement to sentiment scoring was rolled out late April.
+            **PLEASE - look at the correlation charts. Reddit buzz is not a reliable predictor of stock price.**
+        """)
+
     app_style = """
     <style>
-    /*#MainMenu {visibility: hidden;}*/
-    footer {visibility: hidden;}
+    /*#MainMenu {visibility: visible;}*/
+    footer {visibility: visible;}
     footer:after {
         content: "Copyright © 2026 Ethan M. All rights reserved.";
         visibility: visible;
